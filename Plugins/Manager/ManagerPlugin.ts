@@ -21,8 +21,23 @@ export class ManagerPlugin {
 
     private throwApiError(operation: string, errorResponse: any) {
         console.error(`Error en LinkedIn API [${operation}]:`, errorResponse);
+        
+        const errorMessage = errorResponse?.message || 'Error desconocido';
+        const serviceErrorCode = errorResponse?.serviceErrorCode ? ` (ServiceCode: ${errorResponse.serviceErrorCode})` : '';
+        const status = errorResponse?.status ? `HTTP ${errorResponse.status}` : 'HTTP Desconocido';
         const detail = errorResponse ? JSON.stringify(errorResponse) : 'Sin detalles adicionales';
-        throw new Error(`Fallo en LinkedIn API (${operation}). Detalles técnicos: ${detail}. Revisa tus argumentos o permisos de la app.`);
+        
+        let aiGuidance = "Revisa tus argumentos e intenta de nuevo.";
+        
+        if (errorResponse?.status === 401) {
+            aiGuidance = "CRÍTICO: El token de acceso ha expirado o es inválido. Notifica al usuario que debe generar un nuevo Token OAuth 2.0 en el Developer Portal de LinkedIn y guardarlo en el Vault de Urano.";
+        } else if (errorResponse?.status === 403) {
+            aiGuidance = "CRÍTICO: Problema de permisos. Notifica al usuario que el Token no tiene permisos de publicación (w_member_social / w_organization_social) o que el LINKEDIN_AUTHOR_URN ingresado es incorrecto y no tienes permisos para publicar a nombre de ese ID.";
+        } else if (errorResponse?.status === 400) {
+            aiGuidance = "Error de validación. Probablemente enviaste un JSON malformado o una URL inválida. Revisa el esquema de tu petición.";
+        }
+
+        throw new Error(`Fallo en LinkedIn API (${operation}) [${status}]. Mensaje: ${errorMessage}${serviceErrorCode}.\n\nInstrucción para la IA: ${aiGuidance}\n\nDetalles JSON: ${detail}`);
     }
 
     async executeAction(action: string, payload: any) {
