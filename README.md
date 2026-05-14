@@ -40,10 +40,35 @@ Para modificar este plugin e integrarlo en vivo:
 3. Selecciona **Link Local Folder** y escoge la carpeta donde descargaste este código.
 4. Cualquier cambio que hagas localmente y compiles con `npm run deploy` será detectado instantáneamente por la IA.
 
-## Credenciales Necesarias
-En el portal de desarrolladores de LinkedIn (LinkedIn Developer Portal), debes obtener:
-- **LINKEDIN_ACCESS_TOKEN**: Token OAuth 2.0 (con permisos de *w_member_social* o *w_organization_social*).
-- **LINKEDIN_AUTHOR_URN**: El URN de quien publica (ej: `urn:li:person:tu_id` o `urn:li:organization:tu_id`).
+## Credenciales Necesarias y Configuración
+
+Para que el Agente pueda publicar en tu nombre, debes configurar dos variables en tu Vault. Dado que LinkedIn protege celosamente su API, sigue este paso a paso exacto:
+
+### 1. Obtener el LINKEDIN_ACCESS_TOKEN
+1. Ve al [LinkedIn Developer Portal](https://developer.linkedin.com/) y crea una "App". Vincula tu página de empresa cuando te lo pida.
+2. Ve a la pestaña **Products** y solicita acceso a **"Share on LinkedIn"** y **"Sign In with LinkedIn v2"**. *(Nota: Si quieres publicar a nombre de una página de empresa en lugar de tu perfil, debes solicitar el producto "Community Management API" y pasar por su proceso de aprobación manual).*
+3. Ve al menú superior **Docs** -> **API Tools** -> **OAuth Token Generator**.
+4. Selecciona tu App y marca obligatoriamente las siguientes casillas (Scopes):
+   - `openid`
+   - `profile`
+   - `w_member_social` *(o `w_organization_social` si ya te aprobaron el uso corporativo)*
+5. Haz clic en **Request Access Token**. Autoriza la aplicación y copia el token enorme que te arrojará. ¡Ese es tu `LINKEDIN_ACCESS_TOKEN`! (Ten en cuenta que caduca cada 60 días).
+
+### 2. Obtener tu LINKEDIN_AUTHOR_URN (ID Personal)
+La API moderna de LinkedIn (`/rest/posts`) requiere tu identificador interno alfanumérico (OpenID). Para obtenerlo sin fallos:
+
+Abre **PowerShell** en tu computadora (o la terminal de tu sistema) y ejecuta el siguiente comando, reemplazando `TU_TOKEN` por el Access Token que obtuviste en el paso anterior:
+
+```powershell
+Invoke-RestMethod -Uri "https://api.linkedin.com/v2/userinfo" -Headers @{Authorization="Bearer TU_TOKEN"}
+```
+*(Si usas Mac o Linux, usa `curl -H "Authorization: Bearer TU_TOKEN" https://api.linkedin.com/v2/userinfo`)*
+
+El resultado mostrará una propiedad llamada **`sub`** (por ejemplo: `BWsEl8I_IR`). 
+Ese es tu ID real. Para armar tu URN final, simplemente agrégale el prefijo de persona, quedando así:
+👉 **`urn:li:person:BWsEl8I_IR`**
+
+Guarda ese valor exacto en la variable `LINKEDIN_AUTHOR_URN` del Vault.
 
 ## Licencia
 Licencia MIT (Consulta el archivo LICENSE en el repositorio).

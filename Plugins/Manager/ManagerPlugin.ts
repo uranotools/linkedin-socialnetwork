@@ -49,11 +49,12 @@ export class ManagerPlugin {
     private async makeRequest(payloadData: any, operationName: string) {
         const { token } = this.getCredentials();
         
-        const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+        const response = await fetch('https://api.linkedin.com/rest/posts', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'X-Restli-Protocol-Version': '2.0.0',
+                'Linkedin-Version': '202604',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payloadData)
@@ -62,42 +63,53 @@ export class ManagerPlugin {
         if (!response.ok) {
             let errorData;
             try {
-                errorData = await response.json();
+                const textError = await response.text();
+                errorData = textError ? JSON.parse(textError) : { statusText: response.statusText, status: response.status };
             } catch (e) {
                 errorData = { statusText: response.statusText, status: response.status };
             }
             this.throwApiError(operationName, errorData);
         }
 
-        const data = await response.json();
-        return data;
+        const postId = response.headers.get('x-restli-id') || 'Desconocido';
+        let data = {};
+        try {
+            const text = await response.text();
+            if (text) data = JSON.parse(text);
+        } catch (e) {}
+
+        return { ...data, id: postId };
     }
 
     async apiPostText(payload: any) {
         const { content } = payload;
         if (!content || content.trim() === '') throw new Error("El contenido del post no puede estar vacío.");
 
-        const { authorUrn } = this.getCredentials();
+        let { authorUrn } = this.getCredentials();
+        // Asegurar que si el usuario pegó el OpenID "BWsEl8I_IR" directo sin prefijo, se lo agregamos:
+        if (!authorUrn.startsWith('urn:li:')) {
+            authorUrn = `urn:li:person:${authorUrn}`;
+        }
+        
         console.log(`[UranoLinkedInSocialNetwork] Publicando texto: ${content.substring(0, 50)}...`);
 
         const requestBody = {
             author: authorUrn,
-            lifecycleState: "PUBLISHED",
-            specificContent: {
-                "com.linkedin.ugc.ShareContent": {
-                    shareCommentary: { text: content },
-                    shareMediaCategory: "NONE"
-                }
+            commentary: content,
+            visibility: "PUBLIC",
+            distribution: {
+                feedDistribution: "MAIN_FEED",
+                targetEntities: [],
+                thirdPartyDistributionChannels: []
             },
-            visibility: {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-            }
+            lifecycleState: "PUBLISHED",
+            isReshareDisabledByAuthor: false
         };
 
         const result = await this.makeRequest(requestBody, 'postText');
         return {
             success: true,
-            postId: result.id,
+            postId: result?.id || 'Desconocido',
             message: "Post de texto publicado correctamente en LinkedIn."
         };
     }
@@ -106,37 +118,37 @@ export class ManagerPlugin {
         const { content, articleUrl, articleTitle, articleDescription } = payload;
         if (!articleUrl || !articleTitle) throw new Error("Se requiere articleUrl y articleTitle.");
 
-        const { authorUrn } = this.getCredentials();
-        console.log(`[UranoLinkedInSocialNetwork] Publicando artículo: ${articleTitle}`);
-
-        const mediaItem: any = {
-            status: "READY",
-            originalUrl: articleUrl,
-            title: { text: articleTitle }
-        };
-        if (articleDescription) {
-            mediaItem.description = { text: articleDescription };
+        let { authorUrn } = this.getCredentials();
+        if (!authorUrn.startsWith('urn:li:')) {
+            authorUrn = `urn:li:person:${authorUrn}`;
         }
+
+        console.log(`[UranoLinkedInSocialNetwork] Publicando artículo: ${articleTitle}`);
 
         const requestBody = {
             author: authorUrn,
-            lifecycleState: "PUBLISHED",
-            specificContent: {
-                "com.linkedin.ugc.ShareContent": {
-                    shareCommentary: { text: content || '' },
-                    shareMediaCategory: "ARTICLE",
-                    media: [ mediaItem ]
+            commentary: content || '',
+            visibility: "PUBLIC",
+            distribution: {
+                feedDistribution: "MAIN_FEED",
+                targetEntities: [],
+                thirdPartyDistributionChannels: []
+            },
+            content: {
+                article: {
+                    source: articleUrl,
+                    title: articleTitle,
+                    description: articleDescription || ''
                 }
             },
-            visibility: {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-            }
+            lifecycleState: "PUBLISHED",
+            isReshareDisabledByAuthor: false
         };
 
         const result = await this.makeRequest(requestBody, 'postArticle');
         return {
             success: true,
-            postId: result.id,
+            postId: result?.id || 'Desconocido',
             message: `Artículo '${articleTitle}' publicado correctamente en LinkedIn.`
         };
     }
