@@ -1,0 +1,9 @@
+.trash
+node_modules
+dist
+.bin
+*.log
+.env
+test
+package-lock.json
+pnpm-lock.yaml
